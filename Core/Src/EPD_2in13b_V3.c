@@ -1,0 +1,231 @@
+/*****************************************************************************
+* | File      	:   EPD.c
+* | Author      :   Waveshare team
+* | Function    :   2.13inch e-paper b V3
+* | Info        :
+*----------------
+* |	This version:   V1.0
+* | Date        :   2020-04-13
+* | Info        :
+* -----------------------------------------------------------------------------
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documnetation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to  whom the Software is
+# furished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS OR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+******************************************************************************/
+#if defined(EPD_2IN13B_V3)
+#include "EPD_2in13b_V3.h"
+
+
+/******************************************************************************
+function :	Software reset
+parameter:
+******************************************************************************/
+void EPD_Reset(void)
+{
+    DEV_Digital_Write(EPD_CS_PIN, 1);
+    
+    DEV_Digital_Write(EPD_RST_PIN, 1);
+    DEV_Delay_ms(100);
+    DEV_Digital_Write(EPD_RST_PIN, 0);
+    DEV_Delay_ms(2);
+    DEV_Digital_Write(EPD_RST_PIN, 1);
+    DEV_Delay_ms(10);
+}
+
+/******************************************************************************
+function :	send command
+parameter:
+     Reg : Command register
+******************************************************************************/
+void EPD_SendCommand(UBYTE Reg)
+{
+    
+    DEV_Digital_Write(EPD_DC_PIN, 0);
+    DEV_Digital_Write(EPD_CS_PIN, 0);
+    DEV_SPI_WriteByte(Reg);
+    DEV_Digital_Write(EPD_CS_PIN, 1);
+}
+
+/******************************************************************************
+function :	send data
+parameter:
+    Data : Write data
+******************************************************************************/
+void EPD_SendData(UBYTE Data)
+{
+    DEV_Digital_Write(EPD_DC_PIN, 1);
+    DEV_Digital_Write(EPD_CS_PIN, 0);
+    DEV_SPI_WriteByte(Data);
+    DEV_Digital_Write(EPD_CS_PIN, 1);
+}
+
+/******************************************************************************
+function :	Wait until the busy_pin goes LOW
+parameter:
+******************************************************************************/
+void EPD_ReadBusy(void)
+{
+  
+    UBYTE busy;
+    do{
+        EPD_SendCommand(0x71);
+        busy = DEV_Digital_Read(EPD_BUSY_PIN);
+        busy =!(busy & 0x01);
+    }while(false);
+
+DEV_Delay_ms(200);
+}
+
+/******************************************************************************
+function :	Turn On Display
+parameter:
+******************************************************************************/
+void EPD_TurnOnDisplay(void)
+{
+    EPD_SendCommand(0x12);		 //DISPLAY REFRESH
+    DEV_Delay_ms(100);
+    EPD_ReadBusy();
+}
+
+/******************************************************************************
+function :	Initialize the e-Paper register
+parameter:
+******************************************************************************/
+void EPD_Init(void)
+{
+    EPD_Reset();
+    DEV_Delay_ms(10);
+    
+    EPD_SendCommand(0x04);  
+    EPD_ReadBusy();//waiting for the electronic paper IC to release the idle signal
+
+    EPD_SendCommand(0x00);//panel setting
+    EPD_SendData(0x0f);//LUT from OTP，128x296
+    EPD_SendData(0x89);//Temperature sensor, boost and other related timing settings
+
+    EPD_SendCommand(0x61);//resolution setting
+    EPD_SendData (0x68);
+    EPD_SendData (0x00);
+    EPD_SendData (0xD4);
+
+    EPD_SendCommand(0X50);//VCOM AND DATA INTERVAL SETTING
+    EPD_SendData(0x77);//WBmode:VBDF 17|D7 VBDW 97 VBDB 57
+                                 //WBRmode:VBDF F7 VBDW 77 VBDB 37  VBDR B7;
+}
+
+/******************************************************************************
+function :	Clear screen
+parameter:
+******************************************************************************/
+void EPD_Clear(void)
+{
+    UWORD Width = (EPD_WIDTH % 8 == 0)? (EPD_WIDTH / 8 ): (EPD_WIDTH / 8 + 1);
+    UWORD Height = EPD_HEIGHT;
+    
+    //send black data
+    EPD_SendCommand(0x10);
+    for (UWORD j = 0; j < Height; j++) {
+        for (UWORD i = 0; i < Width; i++) {
+            EPD_SendData(0xFF);
+        }
+    }
+
+    //send red data
+    EPD_SendCommand(0x13);
+    for (UWORD j = 0; j < Height; j++) {
+        for (UWORD i = 0; i < Width; i++) {
+            EPD_SendData(0xFF);
+        }
+    }
+    EPD_TurnOnDisplay();
+}
+
+/******************************************************************************
+function :	Sends the image buffer in RAM to e-Paper and displays
+parameter:
+******************************************************************************/
+
+void EPD_Display(const UBYTE *blackimage, const UBYTE *ryimage)
+{
+    UWORD Width, Height;
+    Width = (EPD_WIDTH % 8 == 0)? (EPD_WIDTH / 8 ): (EPD_WIDTH / 8 + 1);
+    Height = EPD_HEIGHT;
+    //H 212
+    //W 104 13
+    EPD_SendCommand(0x10);
+    for (UWORD j = 0; j < Height; j++) {
+        for (UWORD i = 0; i < Width; i++) {
+            EPD_SendData(blackimage[i + j * Width]);
+        }
+    }
+    
+    EPD_SendCommand(0x13);
+    for (UWORD j = 0; j < Height; j++) {
+        for (UWORD i = 0; i < Width; i++) {
+            EPD_SendData(ryimage[i + j * Width]);
+        }
+    }
+    EPD_TurnOnDisplay();
+}
+
+void EPD_DisplayB(const UBYTE *blackimage)
+{
+    UWORD Width, Height;
+    Width = (EPD_WIDTH % 8 == 0)? (EPD_WIDTH / 8 ): (EPD_WIDTH / 8 + 1);
+    Height = EPD_HEIGHT;
+
+    EPD_SendCommand(0x10);
+    for (UWORD j = 0; j < Height; j++) {
+        for (UWORD i = 0; i < Width; i++) {
+            EPD_SendData(blackimage[i + j * Width]);
+        }
+    }
+    EPD_SendCommand(0x13);
+    for (UWORD j = 0; j < Height; j++) {
+        for (UWORD i = 0; i < Width; i++) {
+            EPD_SendData(0xFF);
+        }
+    }
+    
+    EPD_TurnOnDisplay();
+}
+
+/******************************************************************************
+function :	Enter sleep mode
+parameter:
+******************************************************************************/
+void EPD_Sleep(void)
+{
+    EPD_SendCommand(0X50);
+    EPD_SendData(0xf7);	
+
+    EPD_SendCommand(0X02);  	//power off
+    EPD_ReadBusy();          //waiting for the electronic paper IC to release the idle signal
+    EPD_SendCommand(0X07);  	//deep sleep
+    EPD_SendData(0xA5);
+}
+
+void EPD_Start_Red(void){
+    EPD_SendCommand(0x13);
+}
+
+void EPD_Start_Black(void){
+    EPD_SendCommand(0x10);
+}
+#endif /* EPD_2IN13B_V3 */

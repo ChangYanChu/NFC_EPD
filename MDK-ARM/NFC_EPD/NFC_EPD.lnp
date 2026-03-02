@@ -1,0 +1,28 @@
+--cpu Cortex-M0+
+"nfc_epd\startup_stm32l011xx.o"
+"nfc_epd\main.o"
+"nfc_epd\stm32l0xx_it.o"
+"nfc_epd\stm32l0xx_hal_msp.o"
+"nfc_epd\dev_config.o"
+"nfc_epd\epd_2in9b_v3.o"
+"nfc_epd\epd_ssd1680.o"
+"nfc_epd\stm32l0xx_hal_i2c.o"
+"nfc_epd\stm32l0xx_hal_i2c_ex.o"
+"nfc_epd\stm32l0xx_hal.o"
+"nfc_epd\stm32l0xx_hal_rcc.o"
+"nfc_epd\stm32l0xx_hal_rcc_ex.o"
+"nfc_epd\stm32l0xx_hal_flash_ramfunc.o"
+"nfc_epd\stm32l0xx_hal_flash.o"
+"nfc_epd\stm32l0xx_hal_flash_ex.o"
+"nfc_epd\stm32l0xx_hal_gpio.o"
+"nfc_epd\stm32l0xx_hal_dma.o"
+"nfc_epd\stm32l0xx_hal_pwr.o"
+"nfc_epd\stm32l0xx_hal_pwr_ex.o"
+"nfc_epd\stm32l0xx_hal_cortex.o"
+"nfc_epd\stm32l0xx_hal_exti.o"
+"nfc_epd\stm32l0xx_hal_spi.o"
+"nfc_epd\system_stm32l0xx.o"
+--strict --scatter "NFC_EPD\NFC_EPD.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "NFC_EPD.map" -o NFC_EPD\NFC_EPD.axf

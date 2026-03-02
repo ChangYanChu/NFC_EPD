@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFC 墨水屏刷写工具</title>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1558b0;
+            --danger: #d93025;
+            --success: #1e8e3e;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #202124;
+            --text-secondary: #5f6368;
+            --border: #dadce0;
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 24px 0 16px;
+        }
+
+        header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        header p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .card h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card h2 .icon {
+            font-size: 18px;
+        }
+
+        /* 屏幕配置 */
+        .config-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .config-row label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .config-row select,
+        .config-row input {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            min-width: 120px;
+        }
+
+        .config-row select:focus,
+        .config-row input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+        }
+
+        /* 上传区域 */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 32px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: var(--primary);
+            background: rgba(26, 115, 232, 0.04);
+        }
+
+        .upload-area .upload-icon {
+            font-size: 40px;
+            margin-bottom: 8px;
+        }
+
+        .upload-area p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .upload-area input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* 预览区域 */
+        .preview-section {
+            display: none;
+            margin-top: 16px;
+        }
+
+        .preview-section.visible {
+            display: block;
+        }
+
+        .preview-container {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .preview-box {
+            text-align: center;
+        }
+
+        .preview-box label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .preview-box canvas {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-width: 100%;
+            height: auto;
+            image-rendering: pixelated;
+        }
+
+        /* 按钮 */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            min-width: 120px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-dark);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #c5221f;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #1a7c37;
+        }
+
+        .btn-outline {
+            background: white;
+            color: var(--primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover:not(:disabled) {
+            background: rgba(26, 115, 232, 0.04);
+            border-color: var(--primary);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+
+        /* 进度 */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e8eaed;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 12px 0;
+            display: none;
+        }
+
+        .progress-bar.visible {
+            display: block;
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 3px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+
+        /* NFC 状态 */
+        .nfc-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .nfc-status.info {
+            background: #e8f0fe;
+            color: #1a73e8;
+        }
+
+        .nfc-status.success {
+            background: #e6f4ea;
+            color: #1e8e3e;
+        }
+
+        .nfc-status.error {
+            background: #fce8e6;
+            color: #d93025;
+        }
+
+        .nfc-status.warning {
+            background: #fef7e0;
+            color: #e37400;
+        }
+
+        /* 日志 */
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 8px;
+            padding: 14px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-area .log-time {
+            color: #6a9955;
+        }
+
+        .log-area .log-info {
+            color: #569cd6;
+        }
+
+        .log-area .log-error {
+            color: #f44747;
+        }
+
+        .log-area .log-success {
+            color: #4ec9b0;
+        }
+
+        .log-area .log-warn {
+            color: #ce9178;
+        }
+
+        /* 数据信息 */
+        .data-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .data-info .tag {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            background: #e8eaed;
+            color: var(--text-secondary);
+        }
+
+        .data-info .tag.highlight {
+            background: #e8f0fe;
+            color: var(--primary);
+        }
+
+        /* NFC写入设置 */
+        .nfc-write-options {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: end;
+            margin-bottom: 12px;
+        }
+
+        .nfc-write-options label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .nfc-write-options input {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            width: 80px;
+        }
+
+        .chunk-info {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 8px 0;
+        }
+
+        /* 响应式 */
+        @media (max-width: 480px) {
+            .config-row {
+                flex-direction: column;
+            }
+            .config-row select,
+            .config-row input {
+                width: 100%;
+            }
+            .btn-group {
+                flex-direction: column;
+            }
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📟 NFC 墨水屏刷写工具</h1>
+            <p>上传图片 → 生成墨水屏数据 → NFC 写入</p>
+        </header>
+
+        <!-- 屏幕配置 -->
+        <div class="card">
+            <h2><span class="icon">⚙️</span> 屏幕配置</h2>
+            <div class="config-row">
+                <div>
+                    <label>屏幕型号</label>
+                    <select id="epdModel">
+                        <option value="104x212">2.13寸 (104×212)</option>
+                        <option value="128x250">HINK (128×250)</option>
+                        <option value="128x296" selected>2.9寸 (128×296)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>颜色模式</label>
+                    <select id="colorMode">
+                        <option value="bwr" selected>黑白红三色</option>
+                        <option value="bw">黑白两色</option>
+                    </select>
+                </div>
+                <div>
+                    <label>旋转</label>
+                    <select id="rotation">
+                        <option value="auto" selected>自动</option>
+                        <option value="0">0°</option>
+                        <option value="90">90°</option>
+                        <option value="180">180°</option>
+                        <option value="270">270°</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 上传图片 -->
+        <div class="card">
+            <h2><span class="icon">🖼️</span> 上传图片</h2>
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <p>点击或拖拽图片到此处</p>
+                <p style="font-size: 12px; margin-top: 4px; color: #999;">支持 JPG / PNG / BMP</p>
+                <input type="file" id="fileInput" accept="image/*">
+            </div>
+
+            <div class="preview-section" id="previewSection">
+                <div class="preview-container">
+                    <div class="preview-box">
+                        <label>原始图片</label>
+                        <canvas id="canvasOriginal"></canvas>
+                    </div>
+                    <div class="preview-box">
+                        <label>处理结果</label>
+                        <canvas id="canvasResult"></canvas>
+                    </div>
+                </div>
+                <div class="progress-bar" id="progressBar">
+                    <div class="fill" id="progressFill"></div>
+                </div>
+                <div class="data-info" id="dataInfo"></div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="btnProcess" disabled>🔄 生成数据</button>
+                    <button class="btn btn-outline" id="btnDownload" disabled>💾 下载数据</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- NFC 写入 -->
+        <div class="card">
+            <h2><span class="icon">📡</span> NFC 写入</h2>
+            <div id="nfcStatus" class="nfc-status info">
+                ℹ️ 请先生成墨水屏数据，然后使用 NFC 写入
+            </div>
+
+            <div class="nfc-write-options">
+                <div>
+                    <label>每次写入大小 (字节)</label>
+                    <input type="number" id="chunkSize" value="240" min="16" max="1024" step="16">
+                </div>
+                <div>
+                    <label>写入间隔 (ms)</label>
+                    <input type="number" id="writeDelay" value="300" min="100" max="5000" step="100">
+                </div>
+            </div>
+            <div class="chunk-info" id="chunkInfo">等待数据生成...</div>
+
+            <div class="progress-bar" id="nfcProgressBar">
+                <div class="fill" id="nfcProgressFill"></div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-success" id="btnNfcWrite" disabled>📡 开始 NFC 写入</button>
+                <button class="btn btn-danger" id="btnNfcStop" disabled>⏹️ 停止</button>
+            </div>
+        </div>
+
+        <!-- 日志 -->
+        <div class="card">
+            <h2><span class="icon">📋</span> 日志</h2>
+            <div class="log-area" id="logArea"></div>
+        </div>
+    </div>
+
+    <script>
+    // ======================== 全局状态 ========================
+    const state = {
+        originalImage: null,       // 原始图片 ImageData
+        processedImageData: null,  // 处理后的 ImageData (用于预览)
+        epdBinaryData: null,       // 生成的二进制数据 Uint8Array
+        nfcWriting: false,         // NFC 写入中
+        nfcAbort: null,            // AbortController
+    };
+
+    // ======================== 调色板定义 ========================
+    // RGB 格式
+    const PAL = {
+        bw: [[0, 0, 0], [255, 255, 255]],
+        bwr: [[0, 0, 0], [255, 0, 0], [255, 255, 255]]
+    };
+
+    // ======================== DOM 元素 ========================
+    const $ = id => document.getElementById(id);
+    const epdModel       = $('epdModel');
+    const colorMode       = $('colorMode');
+    const rotation        = $('rotation');
+    const fileInput       = $('fileInput');
+    const uploadArea      = $('uploadArea');
+    const previewSection  = $('previewSection');
+    const canvasOriginal  = $('canvasOriginal');
+    const canvasResult    = $('canvasResult');
+    const progressBar     = $('progressBar');
+    const progressFill    = $('progressFill');
+    const dataInfo        = $('dataInfo');
+    const btnProcess      = $('btnProcess');
+    const btnDownload     = $('btnDownload');
+    const nfcStatus       = $('nfcStatus');
+    const chunkSizeInput  = $('chunkSize');
+    const writeDelayInput = $('writeDelay');
+    const chunkInfo       = $('chunkInfo');
+    const nfcProgressBar  = $('nfcProgressBar');
+    const nfcProgressFill = $('nfcProgressFill');
+    const btnNfcWrite     = $('btnNfcWrite');
+    const btnNfcStop      = $('btnNfcStop');
+    const logArea         = $('logArea');
+
+    // ======================== 日志 ========================
+    function log(msg, type = 'info') {
+        const time = new Date().toLocaleTimeString();
+        const span = document.createElement('div');
+        span.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${type}">${msg}</span>`;
+        logArea.appendChild(span);
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    // ======================== 工具函数 ========================
+    function getEpdSize() {
+        const [w, h] = epdModel.value.split('x').map(Number);
+        return { width: w, height: h };
+    }
+
+    function clamp(val, min, max) {
+        return val < min ? min : (val > max ? max : val);
+    }
+
+    // ======================== 颜色匹配 (对应 P2P.py 的 get_near) ========================
+    function getNearColor(r, g, b, mode) {
+        if (mode === 'bw') {
+            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            return gray < 128 ? 0 : 1;
+        }
+
+        // 三色 (黑白红)
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        const redSimilarity = r - Math.max(g, b);
+
+        if (gray < 60) return 0;          // 黑
+        if (gray > 200) return 2;          // 白
+        if (redSimilarity > 30 && gray > 80 && gray < 180) return 1;  // 红
+        return gray < 128 ? 0 : 2;
+    }
+
+    // ======================== 图像处理 (Floyd-Steinberg 误差扩散) ========================
+    function processImage(imageData, targetW, targetH, mode) {
+        const pal = PAL[mode];
+        const srcW = imageData.width;
+        const srcH = imageData.height;
+        const src = imageData.data; // RGBA
+
+        // 创建浮点图像用于误差扩散
+        const img = new Float32Array(targetW * targetH * 3);
+        // 从 imageData 提取 RGB 到 img
+        for (let j = 0; j < targetH; j++) {
+            for (let i = 0; i < targetW; i++) {
+                const si = (j * srcW + i) * 4;
+                const di = (j * targetW + i) * 3;
+                img[di + 0] = src[si + 0]; // R
+                img[di + 1] = src[si + 1]; // G
+                img[di + 2] = src[si + 2]; // B
+            }
+        }
+
+        // 输出 RGBA
+        const out = new Uint8ClampedArray(targetW * targetH * 4);
+        // 记录每个像素的调色板索引
+        const indexMap = new Uint8Array(targetW * targetH);
+
+        for (let j = 0; j < targetH; j++) {
+            for (let i = 0; i < targetW; i++) {
+                const idx = (j * targetW + i) * 3;
+                let r = clamp(img[idx + 0], 0, 255);
+                let g = clamp(img[idx + 1], 0, 255);
+                let b = clamp(img[idx + 2], 0, 255);
+
+                const ci = getNearColor(r, g, b, mode);
+                const color = pal[ci];
+                indexMap[j * targetW + i] = ci;
+
+                // 写入输出
+                const oi = (j * targetW + i) * 4;
+                out[oi + 0] = color[0];
+                out[oi + 1] = color[1];
+                out[oi + 2] = color[2];
+                out[oi + 3] = 255;
+
+                // 计算误差
+                const errR = r - color[0];
+                const errG = g - color[1];
+                const errB = b - color[2];
+
+                // Floyd-Steinberg 误差扩散 (与 P2P.py 一致)
+                if (i === 0) {
+                    if (i < targetW - 1) {
+                        // 下方当前列
+                        const ni1 = ((j + 1) * targetW + i) * 3;
+                        if (j + 1 < targetH) {
+                            img[ni1 + 0] += errR * 7.0 / 16.0;
+                            img[ni1 + 1] += errG * 7.0 / 16.0;
+                            img[ni1 + 2] += errB * 7.0 / 16.0;
+                        }
+                        // 下方右侧
+                        const ni2 = ((j + 1) * targetW + i + 1) * 3;
+                        if (j + 1 < targetH) {
+                            img[ni2 + 0] += errR * 2.0 / 16.0;
+                            img[ni2 + 1] += errG * 2.0 / 16.0;
+                            img[ni2 + 2] += errB * 2.0 / 16.0;
+                        }
+                        // 右侧
+                        const ni3 = (j * targetW + i + 1) * 3;
+                        img[ni3 + 0] += errR * 7.0 / 16.0;
+                        img[ni3 + 1] += errG * 7.0 / 16.0;
+                        img[ni3 + 2] += errB * 7.0 / 16.0;
+                    }
+                } else if (i === targetW - 1) {
+                    // 下方左侧
+                    if (j + 1 < targetH) {
+                        const ni1 = ((j + 1) * targetW + i - 1) * 3;
+                        img[ni1 + 0] += errR * 7.0 / 16.0;
+                        img[ni1 + 1] += errG * 7.0 / 16.0;
+                        img[ni1 + 2] += errB * 7.0 / 16.0;
+                        // 下方当前列
+                        const ni2 = ((j + 1) * targetW + i) * 3;
+                        img[ni2 + 0] += errR * 9.0 / 16.0;
+                        img[ni2 + 1] += errG * 9.0 / 16.0;
+                        img[ni2 + 2] += errB * 9.0 / 16.0;
+                    }
+                } else {
+                    // 右侧
+                    const ni0 = (j * targetW + i + 1) * 3;
+                    img[ni0 + 0] += errR * 7.0 / 16.0;
+                    img[ni0 + 1] += errG * 7.0 / 16.0;
+                    img[ni0 + 2] += errB * 7.0 / 16.0;
+
+                    if (j + 1 < targetH) {
+                        // 下方左侧
+                        const ni1 = ((j + 1) * targetW + i - 1) * 3;
+                        img[ni1 + 0] += errR * 3.0 / 16.0;
+                        img[ni1 + 1] += errG * 3.0 / 16.0;
+                        img[ni1 + 2] += errB * 3.0 / 16.0;
+                        // 下方当前列
+                        const ni2 = ((j + 1) * targetW + i) * 3;
+                        img[ni2 + 0] += errR * 5.0 / 16.0;
+                        img[ni2 + 1] += errG * 5.0 / 16.0;
+                        img[ni2 + 2] += errB * 5.0 / 16.0;
+                        // 下方右侧
+                        if (i + 1 < targetW) {
+                            const ni3 = ((j + 1) * targetW + i + 1) * 3;
+                            img[ni3 + 0] += errR * 1.0 / 16.0;
+                            img[ni3 + 1] += errG * 1.0 / 16.0;
+                            img[ni3 + 2] += errB * 1.0 / 16.0;
+                        }
+                    }
+                }
+            }
+        }
+
+        return { imageData: new ImageData(out, targetW, targetH), indexMap };
+    }
+
+    // ======================== 生成 EPD 二进制数据 (对应 P2P.py 的 demo 后半段) ========================
+    function generateEpdData(indexMap, width, height, mode) {
+        const totalPixels = width * height;
+        const byteCount = totalPixels >> 3; // / 8
+
+        if (mode === 'bwr') {
+            // 三色模式: black[] + red[]
+            const black = new Uint8Array(byteCount);
+            const red = new Uint8Array(byteCount);
+
+            for (let index = 0; index < totalPixels; index++) {
+                const pI = index >> 3;       // index // 8
+                const bitI = 7 - (index & 7); // 7 - (index % 8)
+                const maskH = (1 << bitI) & 0xff;
+                const maskY = ~(1 << bitI) & 0xff;
+
+                const ci = indexMap[index];
+                // ci: 0=黑, 1=红, 2=白
+                if (ci === 2) {
+                    // white: 红黑都置为1
+                    black[pI] = black[pI] | maskH;
+                    red[pI] = red[pI] | maskH;
+                } else if (ci === 1) {
+                    // red: 黑置为1，红置为0
+                    black[pI] = black[pI] | maskH;
+                    red[pI] = red[pI] & maskY;
+                } else {
+                    // black: 黑置为0，红置为1
+                    black[pI] = black[pI] & maskY;
+                    red[pI] = red[pI] | maskH;
+                }
+            }
+
+            // 拼接: black + red
+            const result = new Uint8Array(byteCount * 2);
+            result.set(black, 0);
+            result.set(red, byteCount);
+            return result;
+        } else {
+            // 黑白模式
+            const black = new Uint8Array(byteCount);
+            for (let index = 0; index < totalPixels; index++) {
+                const pI = index >> 3;
+                const bitI = 7 - (index & 7);
+                const maskH = (1 << bitI) & 0xff;
+                const maskY = ~(1 << bitI) & 0xff;
+
+                const ci = indexMap[index];
+                if (ci === 1) {
+                    // white
+                    black[pI] = black[pI] | maskH;
+                } else {
+                    // black
+                    black[pI] = black[pI] & maskY;
+                }
+            }
+            return black;
+        }
+    }
+
+    // ======================== 图片加载与缩放 ========================
+    function loadImage(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = reader.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function resizeAndGetImageData(img, targetW, targetH, rotationDeg) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let srcW = img.width;
+        let srcH = img.height;
+        let drawW = targetW;
+        let drawH = targetH;
+
+        // 自动旋转: 如果图片是横版而目标是竖版 (或反之)
+        if (rotationDeg === 'auto') {
+            const imgLandscape = srcW > srcH;
+            const targetLandscape = targetW > targetH;
+            rotationDeg = (imgLandscape !== targetLandscape) ? 90 : 0;
+        } else {
+            rotationDeg = parseInt(rotationDeg);
+        }
+
+        if (rotationDeg === 90 || rotationDeg === 270) {
+            canvas.width = targetW;
+            canvas.height = targetH;
+            ctx.translate(targetW / 2, targetH / 2);
+            ctx.rotate((rotationDeg * Math.PI) / 180);
+            // 旋转后需要绘制到旋转后的尺寸
+            ctx.drawImage(img, -targetH / 2, -targetW / 2, targetH, targetW);
+        } else {
+            canvas.width = targetW;
+            canvas.height = targetH;
+            if (rotationDeg === 180) {
+                ctx.translate(targetW / 2, targetH / 2);
+                ctx.rotate(Math.PI);
+                ctx.drawImage(img, -targetW / 2, -targetH / 2, targetW, targetH);
+            } else {
+                ctx.drawImage(img, 0, 0, targetW, targetH);
+            }
+        }
+
+        return ctx.getImageData(0, 0, targetW, targetH);
+    }
+
+    // ======================== 事件处理 ========================
+
+    // 拖拽上传
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].type.startsWith('image/')) {
+            handleFile(files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFile(e.target.files[0]);
+        }
+    });
+
+    async function handleFile(file) {
+        log(`📂 加载图片: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+        try {
+            const img = await loadImage(file);
+            state.originalImage = img;
+            log(`✅ 图片加载完成: ${img.width}×${img.height}`, 'success');
+
+            // 显示原始预览
+            const { width, height } = getEpdSize();
+            const origData = resizeAndGetImageData(img, width, height, rotation.value);
+
+            canvasOriginal.width = width;
+            canvasOriginal.height = height;
+            canvasOriginal.style.width = Math.min(width * 2, 280) + 'px';
+            canvasOriginal.getContext('2d').putImageData(origData, 0, 0);
+
+            // 清空结果
+            canvasResult.width = width;
+            canvasResult.height = height;
+            canvasResult.style.width = Math.min(width * 2, 280) + 'px';
+            const ctx = canvasResult.getContext('2d');
+            ctx.fillStyle = '#eee';
+            ctx.fillRect(0, 0, width, height);
+
+            previewSection.classList.add('visible');
+            btnProcess.disabled = false;
+            btnDownload.disabled = true;
+            btnNfcWrite.disabled = true;
+            state.epdBinaryData = null;
+            dataInfo.innerHTML = '';
+            chunkInfo.textContent = '等待数据生成...';
+        } catch (err) {
+            log(`❌ 图片加载失败: ${err.message}`, 'error');
+        }
+    }
+
+    // 处理按钮
+    btnProcess.addEventListener('click', async () => {
+        if (!state.originalImage) return;
+
+        const { width, height } = getEpdSize();
+        const mode = colorMode.value;
+        const rot = rotation.value;
+
+        log(`🔄 开始处理: ${width}×${height}, 模式=${mode}, 旋转=${rot}`);
+        btnProcess.disabled = true;
+        progressBar.classList.add('visible');
+        progressFill.style.width = '10%';
+
+        // 异步处理，避免阻塞UI
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        try {
+            // 1. 缩放图片
+            const imageData = resizeAndGetImageData(state.originalImage, width, height, rot);
+            progressFill.style.width = '30%';
+            await new Promise(resolve => setTimeout(resolve, 30));
+
+            // 2. 误差扩散抖动
+            const { imageData: resultData, indexMap } = processImage(imageData, width, height, mode);
+            progressFill.style.width = '70%';
+            await new Promise(resolve => setTimeout(resolve, 30));
+
+            // 3. 生成二进制数据
+            const binaryData = generateEpdData(indexMap, width, height, mode);
+            progressFill.style.width = '90%';
+
+            // 4. 显示结果
+            state.processedImageData = resultData;
+            state.epdBinaryData = binaryData;
+
+            canvasResult.width = width;
+            canvasResult.height = height;
+            canvasResult.style.width = Math.min(width * 2, 280) + 'px';
+            canvasResult.getContext('2d').putImageData(resultData, 0, 0);
+
+            progressFill.style.width = '100%';
+
+            // 显示数据信息
+            const totalPixels = width * height;
+            dataInfo.innerHTML = `
+                <span class="tag highlight">📐 ${width}×${height}</span>
+                <span class="tag highlight">🎨 ${mode === 'bwr' ? '黑白红' : '黑白'}</span>
+                <span class="tag">📦 数据大小: ${binaryData.length} 字节</span>
+                <span class="tag">🔢 像素总数: ${totalPixels}</span>
+            `;
+
+            // 更新 chunk info
+            updateChunkInfo();
+
+            btnDownload.disabled = false;
+            btnNfcWrite.disabled = false;
+
+            log(`✅ 处理完成! 数据大小: ${binaryData.length} 字节`, 'success');
+        } catch (err) {
+            log(`❌ 处理失败: ${err.message}`, 'error');
+            console.error(err);
+        } finally {
+            btnProcess.disabled = false;
+            setTimeout(() => {
+                progressBar.classList.remove('visible');
+                progressFill.style.width = '0%';
+            }, 500);
+        }
+    });
+
+    // 下载数据
+    btnDownload.addEventListener('click', () => {
+        if (!state.epdBinaryData) return;
+        const blob = new Blob([state.epdBinaryData], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'img.data';
+        a.click();
+        URL.revokeObjectURL(url);
+        log('💾 数据文件已下载: img.data', 'success');
+    });
+
+    // ======================== NFC 相关 ========================
+
+    function updateChunkInfo() {
+        if (!state.epdBinaryData) return;
+        const chunkSize = parseInt(chunkSizeInput.value) || 240;
+        const total = state.epdBinaryData.length;
+        const chunks = Math.ceil(total / chunkSize);
+        chunkInfo.textContent = `总共 ${total} 字节, 分 ${chunks} 次写入, 每次 ${chunkSize} 字节`;
+    }
+
+    chunkSizeInput.addEventListener('change', updateChunkInfo);
+
+    function setNfcStatus(msg, type = 'info') {
+        const icons = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' };
+        nfcStatus.className = `nfc-status ${type}`;
+        nfcStatus.textContent = `${icons[type] || ''} ${msg}`;
+    }
+
+    // NFC 写入
+    btnNfcWrite.addEventListener('click', async () => {
+        if (!state.epdBinaryData) {
+            setNfcStatus('请先生成数据', 'warning');
+            return;
+        }
+
+        if (!('NDEFReader' in window)) {
+            setNfcStatus('此浏览器不支持 Web NFC, 请使用 Android Chrome 89+', 'error');
+            log('❌ Web NFC 不可用, 需要 Android Chrome 89+', 'error');
+            return;
+        }
+
+        state.nfcWriting = true;
+        state.nfcAbort = new AbortController();
+        btnNfcWrite.disabled = true;
+        btnNfcStop.disabled = false;
+        nfcProgressBar.classList.add('visible');
+
+        const chunkSize = parseInt(chunkSizeInput.value) || 240;
+        const writeDelay = parseInt(writeDelayInput.value) || 300;
+        const data = state.epdBinaryData;
+        const totalChunks = Math.ceil(data.length / chunkSize);
+
+        log(`📡 NFC 写入开始: ${data.length} 字节, 分 ${totalChunks} 块`);
+        setNfcStatus('等待 NFC 标签靠近...', 'warning');
+
+        try {
+            const ndef = new NDEFReader();
+
+            for (let i = 0; i < totalChunks; i++) {
+                if (!state.nfcWriting) {
+                    log('⏹️ 用户取消写入', 'warn');
+                    break;
+                }
+
+                const offset = i * chunkSize;
+                const chunk = data.slice(offset, offset + chunkSize);
+
+                // 构造写入负载:
+                // 头部: [包序号(2字节)] [总包数(2字节)] [偏移(4字节)] [数据长度(2字节)]
+                // 数据: chunk
+                const header = new ArrayBuffer(10);
+                const hView = new DataView(header);
+                hView.setUint16(0, i, true);           // 包序号
+                hView.setUint16(2, totalChunks, true);  // 总包数
+                hView.setUint32(4, offset, true);       // 偏移
+                hView.setUint16(8, chunk.length, true); // 数据长度
+
+                const payload = new Uint8Array(10 + chunk.length);
+                payload.set(new Uint8Array(header), 0);
+                payload.set(chunk, 10);
+
+                const progress = ((i + 1) / totalChunks * 100).toFixed(1);
+                setNfcStatus(`请将 NFC 标签靠近设备... (${i + 1}/${totalChunks}) ${progress}%`, 'warning');
+
+                try {
+                    await ndef.write({
+                        records: [{
+                            recordType: "mime",
+                            mediaType: "application/octet-stream",
+                            data: payload.buffer
+                        }]
+                    }, { signal: state.nfcAbort.signal });
+
+                    nfcProgressFill.style.width = progress + '%';
+                    log(`📡 块 ${i + 1}/${totalChunks} 写入成功 (${chunk.length} 字节)`, 'success');
+                } catch (writeErr) {
+                    if (writeErr.name === 'AbortError') {
+                        log('⏹️ 写入已取消', 'warn');
+                        break;
+                    }
+                    log(`❌ 块 ${i + 1} 写入失败: ${writeErr.message}`, 'error');
+                    setNfcStatus(`写入失败: ${writeErr.message}`, 'error');
+                    // 重试当前块
+                    i--;
+                    await new Promise(r => setTimeout(r, 1000));
+                    continue;
+                }
+
+                // 写入间隔
+                if (i < totalChunks - 1) {
+                    await new Promise(r => setTimeout(r, writeDelay));
+                }
+            }
+
+            if (state.nfcWriting) {
+                setNfcStatus('全部数据写入完成! 🎉', 'success');
+                log('🎉 NFC 写入全部完成!', 'success');
+                nfcProgressFill.style.width = '100%';
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                setNfcStatus(`NFC 错误: ${err.message}`, 'error');
+                log(`❌ NFC 错误: ${err.message}`, 'error');
+            }
+        } finally {
+            state.nfcWriting = false;
+            state.nfcAbort = null;
+            btnNfcWrite.disabled = false;
+            btnNfcStop.disabled = true;
+            setTimeout(() => {
+                nfcProgressBar.classList.remove('visible');
+            }, 2000);
+        }
+    });
+
+    // 停止 NFC 写入
+    btnNfcStop.addEventListener('click', () => {
+        state.nfcWriting = false;
+        if (state.nfcAbort) {
+            state.nfcAbort.abort();
+        }
+        setNfcStatus('已停止写入', 'info');
+        log('⏹️ 已停止 NFC 写入', 'warn');
+    });
+
+    // ======================== 初始化检测 ========================
+    if ('NDEFReader' in window) {
+        log('✅ Web NFC 可用', 'success');
+        setNfcStatus('NFC 就绪, 请先生成数据后写入', 'info');
+    } else {
+        log('⚠️ Web NFC 不可用 (需要 Android Chrome 89+, 且使用 HTTPS)', 'warn');
+        setNfcStatus('Web NFC 不可用, 请使用 Android Chrome 89+ 并开启 HTTPS', 'warning');
+    }
+
+    log('🚀 墨水屏刷写工具已就绪');
+    </script>
+</body>
+</html>
