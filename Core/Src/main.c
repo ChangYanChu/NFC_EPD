@@ -231,13 +231,13 @@ int main(void)
 	
 	HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
 	
+	startPassthrough();  // 仅需调用一次，passthrough 位在 session 寄存器中持久保持
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-			startPassthrough();
       if (checkReady()){
          uint8_t data64[64];
          readPages(0xf8, 0xfb, data64);
@@ -302,6 +302,10 @@ int main(void)
             have_writen = 0;
          }
 				}
+      else {
+         // 没有新数据时让出 I2C 总线，给 RF 防碰撞/选卡留出时间窗口
+         HAL_Delay(5);
+      }
       
      if (stopFlag) break;
   }
