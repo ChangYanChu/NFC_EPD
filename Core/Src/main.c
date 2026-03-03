@@ -206,7 +206,22 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
   EPD_Init();
+	
 	EPD_Start_Black();
+/*
+
+    UWORD Width = (EPD_WIDTH % 8 == 0)? (EPD_WIDTH / 8 ): (EPD_WIDTH / 8 + 1);
+    UWORD Height = EPD_HEIGHT;
+
+    for (UWORD j = 0; j < Height; j++) {
+        for (UWORD i = 0; i < Width; i++) {
+            EPD_SendData(0x00);
+					EPD_SendData(0xff);
+        }
+    }
+		
+		EPD_TurnOnDisplay();
+ */
   
   /* USER CODE END 2 */
 
@@ -215,29 +230,22 @@ int main(void)
 	
 	
 	HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
-	startPassthrough();
+	
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-      if (!checkReady()){
-         startPassthrough();  // Re-enable if lost
-         continue;
-      }
-      {
+			startPassthrough();
+      if (checkReady()){
          uint8_t data64[64];
          readPages(0xf8, 0xfb, data64);
-         if (data64[SRAM_SIZE-4] == 'F' && checkFP(data64)) continue;
+         if (checkFP(data64)) continue;
 				
          if (!writeDone){
 							#if defined(NO_RED)
               if (all_count >= EPD_WIDTH*EPD_HEIGHT/8){
-                  // Clear red RAM before refresh to avoid random red artifacts
-                  EPD_Start_Red();
-                  for(uint16_t i=0; i<EPD_WIDTH/8*EPD_HEIGHT; i++) EPD_SendData(0x00);
-                  EPD_TurnOnDisplay();
 									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
                   writeDone = true;
 							}
@@ -248,7 +256,6 @@ int main(void)
 									DEV_Digital_Write(EPD_CS_PIN, 1);
 							#else
 					     if (all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
-                  EPD_TurnOnDisplay();
 									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
                   writeDone = true;
 								}
@@ -270,14 +277,14 @@ int main(void)
 									// EPD_HINK need
 									invertByte = true;
 									
-									uint8_t dataRed[64-black_p];
-									for(size_t i=0;i<64;i++){
-										data64[i] ^= 0xff;
+									uint8_t red_len = 64 - black_p;
+									uint8_t dataRed[64];
+									for(size_t i=0;i<red_len;i++){
+										dataRed[i] = data64[black_p + i] ^ 0xff;
 									}
-									memcpy(dataRed, &data64[black_p], sizeof(dataRed));
 									DEV_Digital_Write(EPD_DC_PIN, 1);
 									DEV_Digital_Write(EPD_CS_PIN, 0);
-									DEV_SPI_Write_nByte(data64, 64-black_p);
+									DEV_SPI_Write_nByte(dataRed, red_len);
 									DEV_Digital_Write(EPD_CS_PIN, 1);
 								}else{
 									DEV_Digital_Write(EPD_DC_PIN, 1);
@@ -294,19 +301,13 @@ int main(void)
             WriteACK(data64);
             have_writen = 0;
          }
-      }
+				}
       
      if (stopFlag) break;
   }
-	
-	// Fallback: ensure display refresh even if threshold was not hit during loop
-	if (!writeDone) {
-		// Clear red RAM before refresh to avoid random red artifacts
-		EPD_Start_Red();
-		for(uint16_t i=0; i<EPD_WIDTH/8*EPD_HEIGHT; i++) EPD_SendData(0x00);
-		EPD_TurnOnDisplay();
-		HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
-	}
+	// 所有数据接收完毕（FS帧已收到），现在触发 EPD 全屏刷新
+	EPD_TurnOnDisplay();
+	// EPD_TurnOnDisplay 内部已调用 EPD_ReadBusy() 等待刷新完成
 	
   /* USER CODE END 3 */
 }
@@ -331,7 +332,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;  // 4.194MHz (was RANGE_5 = 2.097MHz)
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -375,7 +376,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x00000C18;  // Adjusted for MSI 4.194MHz
+  hi2c1.Init.Timing = 0x00000608;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -465,7 +466,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14|LED_PIN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin|EPD_BUSY_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PC14 LED_PIN_Pin */
   GPIO_InitStruct.Pin = GPIO_PIN_14|LED_PIN_Pin;
@@ -474,20 +475,21 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : EPD_DC_Pin EPD_CS_Pin EPD_RST_Pin EPD_BUSY_Pin */
-  GPIO_InitStruct.Pin = EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin|EPD_BUSY_Pin;
+  /*Configure GPIO pins : EPD_DC_Pin EPD_CS_Pin EPD_RST_Pin (OUTPUT) */
+  GPIO_InitStruct.Pin = EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-  // Fix: EPD_BUSY_Pin must be INPUT to read SSD1680 BUSY signal
-  // (CubeMX grouped it with output pins by mistake)
+  /*Configure GPIO pin : EPD_BUSY_Pin (INPUT - 读取墨水屏忙状态) */
   GPIO_InitStruct.Pin = EPD_BUSY_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
