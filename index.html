@@ -481,11 +481,18 @@
             <div class="nfc-write-options">
                 <div>
                     <label>每次写入大小 (字节)</label>
-                    <input type="number" id="chunkSize" value="240" min="16" max="1024" step="16">
+                    <input type="number" id="chunkSize" value="128" min="16" max="512" step="16">
                 </div>
                 <div>
-                    <label>写入间隔 (ms)</label>
-                    <input type="number" id="writeDelay" value="300" min="100" max="5000" step="100">
+                    <label>写入模式</label>
+                    <select id="writeMode">
+                        <option value="step" selected>逐块手动 (推荐)</option>
+                        <option value="auto">自动连续</option>
+                    </select>
+                </div>
+                <div>
+                    <label>重试延迟 (ms)</label>
+                    <input type="number" id="writeDelay" value="2000" min="500" max="10000" step="500">
                 </div>
             </div>
             <div class="chunk-info" id="chunkInfo">等待数据生成...</div>
@@ -496,6 +503,7 @@
 
             <div class="btn-group">
                 <button class="btn btn-success" id="btnNfcWrite" disabled>📡 开始 NFC 写入</button>
+                <button class="btn btn-primary" id="btnNfcNext" style="display:none">📲 写入下一块</button>
                 <button class="btn btn-danger" id="btnNfcStop" disabled>⏹️ 停止</button>
             </div>
         </div>
@@ -965,15 +973,20 @@
 
     // ======================== NFC 相关 ========================
 
+    const btnNfcNext     = $('btnNfcNext');
+    const writeModeSelect = $('writeMode');
+
     function updateChunkInfo() {
         if (!state.epdBinaryData) return;
-        const chunkSize = parseInt(chunkSizeInput.value) || 240;
+        const chunkSize = parseInt(chunkSizeInput.value) || 128;
         const total = state.epdBinaryData.length;
         const chunks = Math.ceil(total / chunkSize);
-        chunkInfo.textContent = `总共 ${total} 字节, 分 ${chunks} 次写入, 每次 ${chunkSize} 字节`;
+        const mode = writeModeSelect.value === 'step' ? '逐块手动' : '自动连续';
+        chunkInfo.textContent = `总共 ${total} 字节, 分 ${chunks} 次写入, 每次 ${chunkSize} 字节, ${mode}模式`;
     }
 
     chunkSizeInput.addEventListener('change', updateChunkInfo);
+    writeModeSelect.addEventListener('change', updateChunkInfo);
 
     function setNfcStatus(msg, type = 'info') {
         const icons = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' };
@@ -981,7 +994,191 @@
         nfcStatus.textContent = `${icons[type] || ''} ${msg}`;
     }
 
-    // NFC 写入
+    // 构建 NDEF 写入负载
+    function buildPayload(chunkIndex, totalChunks, offset, chunk) {
+        // 头部: [包序号(2字节)] [总包数(2字节)] [偏移(4字节)] [数据长度(2字节)]
+        const header = new ArrayBuffer(10);
+        const hView = new DataView(header);
+        hView.setUint16(0, chunkIndex, true);
+        hView.setUint16(2, totalChunks, true);
+        hView.setUint32(4, offset, true);
+        hView.setUint16(8, chunk.length, true);
+
+        const payload = new Uint8Array(10 + chunk.length);
+        payload.set(new Uint8Array(header), 0);
+        payload.set(chunk, 10);
+        return payload;
+    }
+
+    // 单次 NFC 写入 (带重试)
+    async function nfcWriteChunk(ndef, payload, chunkIndex, totalChunks, signal) {
+        const maxRetries = 3;
+        const retryDelay = parseInt(writeDelayInput.value) || 2000;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+            try {
+                setNfcStatus(
+                    `📲 请将 NFC 标签贴近手机... 块 ${chunkIndex + 1}/${totalChunks}` +
+                    (attempt > 1 ? ` (第${attempt}次重试)` : ''),
+                    'warning'
+                );
+
+                await ndef.write({
+                    records: [{
+                        recordType: "mime",
+                        mediaType: "application/octet-stream",
+                        data: payload.buffer
+                    }]
+                }, { signal });
+
+                return true; // 写入成功
+            } catch (err) {
+                if (err.name === 'AbortError') throw err;
+
+                log(`⚠️ 块 ${chunkIndex + 1} 第${attempt}次写入失败: ${err.message}`, 'warn');
+
+                if (attempt < maxRetries) {
+                    setNfcStatus(`写入失败, ${retryDelay/1000}秒后重试... 请保持标签贴近`, 'error');
+                    await new Promise(r => setTimeout(r, retryDelay));
+                } else {
+                    throw err; // 重试次数用尽
+                }
+            }
+        }
+    }
+
+    // 重置 NFC UI 状态
+    function resetNfcUI() {
+        state.nfcWriting = false;
+        state.nfcAbort = null;
+        state.nfcCurrentChunk = 0;
+        btnNfcWrite.disabled = false;
+        btnNfcWrite.style.display = '';
+        btnNfcNext.style.display = 'none';
+        btnNfcStop.disabled = true;
+    }
+
+    // ========== 自动连续写入模式 ==========
+    async function nfcWriteAuto() {
+        const chunkSize = parseInt(chunkSizeInput.value) || 128;
+        const writeDelay = parseInt(writeDelayInput.value) || 2000;
+        const data = state.epdBinaryData;
+        const totalChunks = Math.ceil(data.length / chunkSize);
+        let completed = false;
+
+        log(`📡 自动写入开始: ${data.length} 字节, 分 ${totalChunks} 块, 间隔 ${writeDelay}ms`);
+
+        try {
+            const ndef = new NDEFReader();
+
+            for (let i = 0; i < totalChunks; i++) {
+                if (!state.nfcWriting) break;
+
+                const offset = i * chunkSize;
+                const chunk = data.slice(offset, offset + chunkSize);
+                const payload = buildPayload(i, totalChunks, offset, chunk);
+
+                await nfcWriteChunk(ndef, payload, i, totalChunks, state.nfcAbort.signal);
+
+                const progress = ((i + 1) / totalChunks * 100).toFixed(1);
+                nfcProgressFill.style.width = progress + '%';
+                log(`✅ 块 ${i + 1}/${totalChunks} 写入成功 (${chunk.length} 字节)`, 'success');
+
+                // 写入间隔: 让 MCU 有时间处理数据
+                if (i < totalChunks - 1 && state.nfcWriting) {
+                    setNfcStatus(`⏳ 等待 MCU 处理... ${writeDelay/1000}秒后写入下一块`, 'info');
+                    await new Promise(r => setTimeout(r, writeDelay));
+                }
+            }
+
+            if (state.nfcWriting) {
+                completed = true;
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                log('⏹️ 写入已取消', 'warn');
+                setNfcStatus('已停止写入', 'info');
+            } else {
+                log(`❌ 写入失败 (重试已用尽): ${err.message}`, 'error');
+                setNfcStatus(`写入失败: ${err.message}，请重新开始`, 'error');
+            }
+        }
+
+        if (completed) {
+            setNfcStatus('🎉 全部数据写入完成!', 'success');
+            log('🎉 NFC 写入全部完成!', 'success');
+            nfcProgressFill.style.width = '100%';
+        }
+
+        resetNfcUI();
+        setTimeout(() => nfcProgressBar.classList.remove('visible'), 3000);
+    }
+
+    // ========== 逐块手动写入模式 ==========
+    async function nfcWriteStep(chunkIndex) {
+        const chunkSize = parseInt(chunkSizeInput.value) || 128;
+        const data = state.epdBinaryData;
+        const totalChunks = Math.ceil(data.length / chunkSize);
+
+        if (chunkIndex >= totalChunks) {
+            setNfcStatus('🎉 全部数据写入完成!', 'success');
+            log('🎉 NFC 写入全部完成!', 'success');
+            nfcProgressFill.style.width = '100%';
+            resetNfcUI();
+            setTimeout(() => nfcProgressBar.classList.remove('visible'), 3000);
+            return;
+        }
+
+        const offset = chunkIndex * chunkSize;
+        const chunk = data.slice(offset, offset + chunkSize);
+        const payload = buildPayload(chunkIndex, totalChunks, offset, chunk);
+
+        btnNfcNext.disabled = true;
+
+        try {
+            const ndef = new NDEFReader();
+            await nfcWriteChunk(ndef, payload, chunkIndex, totalChunks, state.nfcAbort.signal);
+
+            const progress = ((chunkIndex + 1) / totalChunks * 100).toFixed(1);
+            nfcProgressFill.style.width = progress + '%';
+            log(`✅ 块 ${chunkIndex + 1}/${totalChunks} 写入成功 (${chunk.length} 字节)`, 'success');
+
+            state.nfcCurrentChunk = chunkIndex + 1;
+
+            if (chunkIndex + 1 >= totalChunks) {
+                // 全部写完
+                setNfcStatus('🎉 全部数据写入完成!', 'success');
+                log('🎉 NFC 写入全部完成!', 'success');
+                nfcProgressFill.style.width = '100%';
+                resetNfcUI();
+                setTimeout(() => nfcProgressBar.classList.remove('visible'), 3000);
+            } else {
+                // 还有数据, 等待用户点击下一块
+                setNfcStatus(
+                    `✅ 块 ${chunkIndex + 1} 写入成功! 请移开标签，点击「写入下一块」继续 (${chunkIndex + 2}/${totalChunks})`,
+                    'success'
+                );
+                btnNfcNext.disabled = false;
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                log('⏹️ 写入已取消', 'warn');
+                setNfcStatus('已停止写入', 'info');
+                resetNfcUI();
+            } else {
+                log(`❌ 块 ${chunkIndex + 1} 写入失败: ${err.message}`, 'error');
+                setNfcStatus(`块 ${chunkIndex + 1} 写入失败, 请点击「写入下一块」重试`, 'error');
+                btnNfcNext.disabled = false;
+                // 不推进 chunkIndex, 让用户重试当前块
+            }
+        }
+    }
+
+    // ========== 按钮事件 ==========
+
+    // 开始写入
     btnNfcWrite.addEventListener('click', async () => {
         if (!state.epdBinaryData) {
             setNfcStatus('请先生成数据', 'warning');
@@ -996,96 +1193,32 @@
 
         state.nfcWriting = true;
         state.nfcAbort = new AbortController();
+        state.nfcCurrentChunk = 0;
         btnNfcWrite.disabled = true;
         btnNfcStop.disabled = false;
         nfcProgressBar.classList.add('visible');
+        nfcProgressFill.style.width = '0%';
 
-        const chunkSize = parseInt(chunkSizeInput.value) || 240;
-        const writeDelay = parseInt(writeDelayInput.value) || 300;
-        const data = state.epdBinaryData;
-        const totalChunks = Math.ceil(data.length / chunkSize);
+        const mode = writeModeSelect.value;
 
-        log(`📡 NFC 写入开始: ${data.length} 字节, 分 ${totalChunks} 块`);
-        setNfcStatus('等待 NFC 标签靠近...', 'warning');
-
-        try {
-            const ndef = new NDEFReader();
-
-            for (let i = 0; i < totalChunks; i++) {
-                if (!state.nfcWriting) {
-                    log('⏹️ 用户取消写入', 'warn');
-                    break;
-                }
-
-                const offset = i * chunkSize;
-                const chunk = data.slice(offset, offset + chunkSize);
-
-                // 构造写入负载:
-                // 头部: [包序号(2字节)] [总包数(2字节)] [偏移(4字节)] [数据长度(2字节)]
-                // 数据: chunk
-                const header = new ArrayBuffer(10);
-                const hView = new DataView(header);
-                hView.setUint16(0, i, true);           // 包序号
-                hView.setUint16(2, totalChunks, true);  // 总包数
-                hView.setUint32(4, offset, true);       // 偏移
-                hView.setUint16(8, chunk.length, true); // 数据长度
-
-                const payload = new Uint8Array(10 + chunk.length);
-                payload.set(new Uint8Array(header), 0);
-                payload.set(chunk, 10);
-
-                const progress = ((i + 1) / totalChunks * 100).toFixed(1);
-                setNfcStatus(`请将 NFC 标签靠近设备... (${i + 1}/${totalChunks}) ${progress}%`, 'warning');
-
-                try {
-                    await ndef.write({
-                        records: [{
-                            recordType: "mime",
-                            mediaType: "application/octet-stream",
-                            data: payload.buffer
-                        }]
-                    }, { signal: state.nfcAbort.signal });
-
-                    nfcProgressFill.style.width = progress + '%';
-                    log(`📡 块 ${i + 1}/${totalChunks} 写入成功 (${chunk.length} 字节)`, 'success');
-                } catch (writeErr) {
-                    if (writeErr.name === 'AbortError') {
-                        log('⏹️ 写入已取消', 'warn');
-                        break;
-                    }
-                    log(`❌ 块 ${i + 1} 写入失败: ${writeErr.message}`, 'error');
-                    setNfcStatus(`写入失败: ${writeErr.message}`, 'error');
-                    // 重试当前块
-                    i--;
-                    await new Promise(r => setTimeout(r, 1000));
-                    continue;
-                }
-
-                // 写入间隔
-                if (i < totalChunks - 1) {
-                    await new Promise(r => setTimeout(r, writeDelay));
-                }
-            }
-
-            if (state.nfcWriting) {
-                setNfcStatus('全部数据写入完成! 🎉', 'success');
-                log('🎉 NFC 写入全部完成!', 'success');
-                nfcProgressFill.style.width = '100%';
-            }
-        } catch (err) {
-            if (err.name !== 'AbortError') {
-                setNfcStatus(`NFC 错误: ${err.message}`, 'error');
-                log(`❌ NFC 错误: ${err.message}`, 'error');
-            }
-        } finally {
-            state.nfcWriting = false;
-            state.nfcAbort = null;
-            btnNfcWrite.disabled = false;
-            btnNfcStop.disabled = true;
-            setTimeout(() => {
-                nfcProgressBar.classList.remove('visible');
-            }, 2000);
+        if (mode === 'auto') {
+            btnNfcWrite.style.display = '';
+            btnNfcNext.style.display = 'none';
+            await nfcWriteAuto();
+        } else {
+            // 逐块手动模式
+            btnNfcWrite.style.display = 'none';
+            btnNfcNext.style.display = '';
+            btnNfcNext.disabled = true;
+            log(`📡 逐块写入模式: 每次点击写入一块数据`);
+            await nfcWriteStep(0);
         }
+    });
+
+    // 写入下一块 (手动模式)
+    btnNfcNext.addEventListener('click', async () => {
+        if (!state.nfcWriting || !state.epdBinaryData) return;
+        await nfcWriteStep(state.nfcCurrentChunk);
     });
 
     // 停止 NFC 写入
@@ -1096,6 +1229,7 @@
         }
         setNfcStatus('已停止写入', 'info');
         log('⏹️ 已停止 NFC 写入', 'warn');
+        resetNfcUI();
     });
 
     // ======================== 初始化检测 ========================
