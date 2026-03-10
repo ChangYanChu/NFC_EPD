@@ -244,22 +244,12 @@ int main(void)
 				
          if (!writeDone){
 							#if defined(NO_RED)
-              if (all_count >= EPD_WIDTH*EPD_HEIGHT/8){
-									EPD_TurnOnDisplay();
-									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
-                  writeDone = true;
-							}
 							//EPD_write64(data64);
                   DEV_Digital_Write(EPD_DC_PIN, 1);
 									DEV_Digital_Write(EPD_CS_PIN, 0);
 									DEV_SPI_Write_nByte(data64, 64);
 									DEV_Digital_Write(EPD_CS_PIN, 1);
 							#else
-					     if (all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
-                  EPD_TurnOnDisplay();
-									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
-                  writeDone = true;
-								}
 							  if (invertByte){
 									for(size_t i=0;i<64;i++){
 										data64[i] ^= 0xff;
@@ -296,6 +286,19 @@ int main(void)
 							#endif
 	
 					all_count += 64;
+          #if defined(NO_RED)
+          if (all_count >= EPD_WIDTH*EPD_HEIGHT/8){
+            EPD_TurnOnDisplay();
+            HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+            writeDone = true;
+          }
+          #else
+          if (all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
+            EPD_TurnOnDisplay();
+            HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+            writeDone = true;
+          }
+          #endif
 				 }							 
          have_writen += 64;
          if (have_writen >= total_writen && total_writen != 0){
