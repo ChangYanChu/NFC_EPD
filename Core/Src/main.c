@@ -489,7 +489,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : EPD_BUSY_Pin (INPUT for SSD1680 busy read) */
   GPIO_InitStruct.Pin = EPD_BUSY_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
