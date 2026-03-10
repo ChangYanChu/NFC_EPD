@@ -219,8 +219,8 @@ void EPD_TurnOnDisplay(void)
     EPD_SendCommand(0x22);  // Display Update Control 2
     EPD_SendData(0xF7);     // Load temperature, Load LUT, Display, Disable clock/analog
     EPD_SendCommand(0x20);  // Activate Display Update Sequence
-    // Do NOT call EPD_ReadBusy() here!
-    // NFC-powered device: let e-paper refresh on its own using capacitor energy.
+    EPD_ReadBusy();
+    DEV_Delay_ms(100);
 }
 
 /******************************************************************************

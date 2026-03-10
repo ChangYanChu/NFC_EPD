@@ -311,7 +311,11 @@ int main(void)
   }
 	// 所有数据接收完毕（FS帧已收到），现在触发 EPD 全屏刷新
 	EPD_TurnOnDisplay();
-	// EPD_TurnOnDisplay 内部已调用 EPD_ReadBusy() 等待刷新完成
+    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+    while (1)
+    {
+      HAL_Delay(100);
+    }
 	
   /* USER CODE END 3 */
 }
