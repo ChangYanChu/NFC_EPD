@@ -73,6 +73,34 @@ bool stopFlag = false;
 bool writeDone = false;
 bool invertByte = false;
 
+static void resetTransferState(void)
+{
+  total_writen = 0;
+  have_writen = 0;
+  all_count = 0;
+  stopFlag = false;
+  writeDone = false;
+  invertByte = false;
+}
+
+static void beginTransfer(uint16_t totalBytes)
+{
+  resetTransferState();
+  total_writen = totalBytes;
+  HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
+  EPD_Init();
+  EPD_Start_Black();
+}
+
+static void finishTransfer(void)
+{
+  if (!writeDone && all_count > 0) {
+    EPD_TurnOnDisplay();
+    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+  }
+  resetTransferState();
+}
+
 void enableMirror(void){
 // add sram mirror
 	uint8_t data[4] = {0xfe, 0x00, 0x2, 0x2};
@@ -136,13 +164,13 @@ bool checkFP(uint8_t *data){
     uint8_t pg_data[48] = {0};
    if (memcmp(data, pg_data, 48) == 0 && data[SRAM_SIZE-4] == 'F' && data[SRAM_SIZE-3] == 'P')
    {
-      total_writen = data[SRAM_SIZE-5] + (data[SRAM_SIZE-6] << 8);
-      have_writen = 0;
+    uint16_t totalBytes = data[SRAM_SIZE-5] + (data[SRAM_SIZE-6] << 8);
+    beginTransfer(totalBytes);
       return true;
 
    }else if (memcmp(data, pg_data, 48) == 0 && data[SRAM_SIZE-4] == 'F' && data[SRAM_SIZE-3] == 'S')
    {
-      stopFlag = true;
+    finishTransfer();
       return true;
    }
    return false;
@@ -229,8 +257,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	
 	
-	HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
-
   while (1)
   {
     /* USER CODE END WHILE */
@@ -306,10 +332,11 @@ int main(void)
             have_writen = 0;
          }
 				}
-      
-     if (stopFlag) break;
+
+      else {
+        HAL_Delay(5);
+      }
   }
-	EPD_ReadBusy();
 	
   /* USER CODE END 3 */
 }
