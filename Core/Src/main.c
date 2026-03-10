@@ -66,41 +66,12 @@ static void MX_SPI1_Init(void);
 /* USER CODE BEGIN 0 */
 #define NT3H_I2C_ADDR 0xaa
 #define SRAM_SIZE 64
-static const uint8_t CONTROL_MAGIC[10] = {'N', 'F', 'C', '2', 'E', 'P', 'D', '!', 0xA5, 0x5A};
 uint32_t total_writen = 0;
 uint32_t have_writen = 0;
 uint32_t all_count = 0;
 bool stopFlag = false;
 bool writeDone = false;
 bool invertByte = false;
-
-static void resetTransferState(void)
-{
-  total_writen = 0;
-  have_writen = 0;
-  all_count = 0;
-  stopFlag = false;
-  writeDone = false;
-  invertByte = false;
-}
-
-static void beginTransfer(uint16_t totalBytes)
-{
-  resetTransferState();
-  total_writen = totalBytes;
-  HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
-  EPD_Init();
-  EPD_Start_Black();
-}
-
-static void finishTransfer(void)
-{
-  if (!writeDone && all_count > 0) {
-    EPD_TurnOnDisplay();
-    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
-  }
-  resetTransferState();
-}
 
 void enableMirror(void){
 // add sram mirror
@@ -161,44 +132,18 @@ void WriteACK(uint8_t *dataBuffer)
     setNFCtoI2C();
 }
 
-static bool isControlFrame(const uint8_t *data, char marker, uint16_t *totalBytes)
-{
-    uint8_t pg_data[48] = {0};
-
-    if (memcmp(data, pg_data, 48) != 0) {
-      return false;
-    }
-    if (memcmp(data + 48, CONTROL_MAGIC, sizeof(CONTROL_MAGIC)) != 0) {
-      return false;
-    }
-    if (data[60] != 'F' || data[61] != (uint8_t)marker || data[62] != 0xC3 || data[63] != 0x3C) {
-      return false;
-    }
-
-    if (totalBytes != NULL) {
-      *totalBytes = ((uint16_t)data[58] << 8) | data[59];
-    }
-    return true;
-}
-
 bool checkFP(uint8_t *data){
-   uint16_t totalBytes = 0;
-   if (isControlFrame(data, 'P', &totalBytes))
+    uint8_t pg_data[48] = {0};
+   if (memcmp(data, pg_data, 48) == 0 && data[SRAM_SIZE-4] == 'F' && data[SRAM_SIZE-3] == 'P')
    {
-      if (total_writen == 0 && all_count == 0 && !writeDone) {
-        beginTransfer(totalBytes);
-        return true;
-      }
-      return false;
+      total_writen = data[SRAM_SIZE-5] + (data[SRAM_SIZE-6] << 8);
+      have_writen = 0;
+      return true;
 
-   }else if (isControlFrame(data, 'S', NULL))
+   }else if (memcmp(data, pg_data, 48) == 0 && data[SRAM_SIZE-4] == 'F' && data[SRAM_SIZE-3] == 'S')
    {
-      if (total_writen != 0 && all_count >= total_writen) {
-        finishTransfer();
-        return true;
-      }
-    return false;
-      
+      stopFlag = true;
+      return true;
    }
    return false;
    
@@ -284,12 +229,15 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	
 	
+	HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
+	
+	startPassthrough();  // 仅需调用一次，passthrough 位在 session 寄存器中持久保持
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-			startPassthrough();
       if (checkReady()){
          uint8_t data64[64];
          readPages(0xf8, 0xfb, data64);
@@ -297,12 +245,20 @@ int main(void)
 				
          if (!writeDone){
 							#if defined(NO_RED)
+              if (all_count >= EPD_WIDTH*EPD_HEIGHT/8){
+									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+                  writeDone = true;
+							}
 							//EPD_write64(data64);
                   DEV_Digital_Write(EPD_DC_PIN, 1);
 									DEV_Digital_Write(EPD_CS_PIN, 0);
 									DEV_SPI_Write_nByte(data64, 64);
 									DEV_Digital_Write(EPD_CS_PIN, 1);
 							#else
+					     if (all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
+									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+                  writeDone = true;
+								}
 							  if (invertByte){
 									for(size_t i=0;i<64;i++){
 										data64[i] ^= 0xff;
@@ -346,11 +302,20 @@ int main(void)
             have_writen = 0;
          }
 				}
-
       else {
-        HAL_Delay(5);
+         // 没有新数据时让出 I2C 总线，给 RF 防碰撞/选卡留出时间窗口
+         HAL_Delay(5);
       }
+      
+     if (stopFlag) break;
   }
+	// 所有数据接收完毕（FS帧已收到），现在触发 EPD 全屏刷新
+	EPD_TurnOnDisplay();
+    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+    while (1)
+    {
+      HAL_Delay(100);
+    }
 	
   /* USER CODE END 3 */
 }
