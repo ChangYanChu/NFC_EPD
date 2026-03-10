@@ -231,13 +231,13 @@ int main(void)
 	
 	HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
 	
-	startPassthrough();  // 仅需调用一次，passthrough 位在 session 寄存器中持久保持
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+			startPassthrough();
       if (checkReady()){
          uint8_t data64[64];
          readPages(0xf8, 0xfb, data64);
@@ -246,6 +246,7 @@ int main(void)
          if (!writeDone){
 							#if defined(NO_RED)
               if (all_count >= EPD_WIDTH*EPD_HEIGHT/8){
+                  EPD_TurnOnDisplay();
 									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
                   writeDone = true;
 							}
@@ -256,6 +257,7 @@ int main(void)
 									DEV_Digital_Write(EPD_CS_PIN, 1);
 							#else
 					     if (all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
+                  EPD_TurnOnDisplay();
 									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
                   writeDone = true;
 								}
@@ -309,13 +311,7 @@ int main(void)
       
      if (stopFlag) break;
   }
-	// 所有数据接收完毕（FS帧已收到），现在触发 EPD 全屏刷新
-	EPD_TurnOnDisplay();
-    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
-    while (1)
-    {
-      HAL_Delay(100);
-    }
+	EPD_ReadBusy();
 	
   /* USER CODE END 3 */
 }
@@ -474,7 +470,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14|LED_PIN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin|EPD_BUSY_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PC14 LED_PIN_Pin */
   GPIO_InitStruct.Pin = GPIO_PIN_14|LED_PIN_Pin;
@@ -483,17 +479,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : EPD_DC_Pin EPD_CS_Pin EPD_RST_Pin (OUTPUT) */
-  GPIO_InitStruct.Pin = EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin;
+  /*Configure GPIO pins : EPD_DC_Pin EPD_CS_Pin EPD_RST_Pin EPD_BUSY_Pin */
+  GPIO_InitStruct.Pin = EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin|EPD_BUSY_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : EPD_BUSY_Pin (INPUT - 读取墨水屏忙状态) */
-  GPIO_InitStruct.Pin = EPD_BUSY_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
