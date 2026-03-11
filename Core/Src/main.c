@@ -279,14 +279,14 @@ int main(void)
 									// EPD_HINK need
 									invertByte = true;
 									
-									uint8_t red_len = 64 - black_p;
-									uint8_t dataRed[64];
-									for(size_t i=0;i<red_len;i++){
-										dataRed[i] = data64[black_p + i] ^ 0xff;
+									uint8_t dataRed[64-black_p];
+									for(size_t i=0;i<64;i++){
+										data64[i] ^= 0xff;
 									}
+									memcpy(dataRed, &data64[black_p], sizeof(dataRed));
 									DEV_Digital_Write(EPD_DC_PIN, 1);
 									DEV_Digital_Write(EPD_CS_PIN, 0);
-									DEV_SPI_Write_nByte(dataRed, red_len);
+									DEV_SPI_Write_nByte(data64, 64-black_p);
 									DEV_Digital_Write(EPD_CS_PIN, 1);
 								}else{
 									DEV_Digital_Write(EPD_DC_PIN, 1);
@@ -304,10 +304,6 @@ int main(void)
             have_writen = 0;
          }
 				}
-      else {
-         // 没有新数据时让出 I2C 总线，给 RF 防碰撞/选卡留出时间窗口
-         HAL_Delay(5);
-      }
       
      if (stopFlag) break;
   }
@@ -470,7 +466,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14|LED_PIN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin|EPD_BUSY_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PC14 LED_PIN_Pin */
   GPIO_InitStruct.Pin = GPIO_PIN_14|LED_PIN_Pin;
@@ -479,17 +475,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : EPD_DC_Pin EPD_CS_Pin EPD_RST_Pin */
-  GPIO_InitStruct.Pin = EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin;
+  /*Configure GPIO pins : EPD_DC_Pin EPD_CS_Pin EPD_RST_Pin EPD_BUSY_Pin */
+  GPIO_InitStruct.Pin = EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin|EPD_BUSY_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : EPD_BUSY_Pin (INPUT for SSD1680 busy read) */
-  GPIO_InitStruct.Pin = EPD_BUSY_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */

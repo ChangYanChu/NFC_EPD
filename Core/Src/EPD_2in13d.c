@@ -1,4 +1,3 @@
-#if defined(EPD_2IN13D)
 #include "EPD_2in13d.h"
 
 /**
@@ -436,4 +435,3 @@ void EPD_MY_2IN13D_TurnOnDisplay(void){
     DEV_Delay_ms(10);     //!!!The delay here is necessary, 200uS at least!!!
     //EPD_2IN13D_ReadBusy_no_wait();
 }
-#endif /* EPD_2IN13D */

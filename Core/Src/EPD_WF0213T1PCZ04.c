@@ -1,4 +1,3 @@
-#if defined(EPD_WF0213T1PCZ04)
 #include "EPD_WF0213T1PCZ04.h"
 
 const uint8_t bw2grey[] = {0x00,0x03,0x0C,0x0F,0x30,0x33,0x3C,0x3F,0xC0,0xC3,0xCC,0xCF,0xF0,0XF3,0xFC,0xFF};
@@ -174,4 +173,3 @@ void EPD_write64(uint8_t *data){
 		DEV_SPI_Write_nByte(data128, 128);
 		DEV_Digital_Write(EPD_CS_PIN, 1);
 }
-#endif /* EPD_WF0213T1PCZ04 */

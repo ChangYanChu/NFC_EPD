@@ -1,5 +1,4 @@
 
-#if defined(EPD_2IN13BC)
 #include "EPD_2in13bc.h"
 
 /******************************************************************************
@@ -161,4 +160,3 @@ void EPD_Sleep(void)
 void EPD_Start_Black(void){
   EPD_SendCommand(0x13);
 }
-#endif /* EPD_2IN13BC */

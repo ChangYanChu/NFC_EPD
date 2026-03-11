@@ -28,7 +28,6 @@
 # THE SOFTWARE.
 #
 ******************************************************************************/
-#if defined(EPD_2IN13B_V3)
 #include "EPD_2in13b_V3.h"
 
 
@@ -228,4 +227,3 @@ void EPD_Start_Red(void){
 void EPD_Start_Black(void){
     EPD_SendCommand(0x10);
 }
-#endif /* EPD_2IN13B_V3 */

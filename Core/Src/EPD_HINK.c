@@ -76,14 +76,14 @@ parameter:
 ******************************************************************************/
 void EPD_ReadBusy(void)
 {
-    uint32_t timeout = 30000; // 最多等待 30 秒（BWR全刷新约 15-25秒）
-    while(timeout--)
-    {
-        UBYTE busy = DEV_Digital_Read(EPD_BUSY_PIN);
-        if((busy & 0x01) == 0) return; // BUSY=0 表示空闲
-        DEV_Delay_ms(1);
-    }
-    // 超时也返回，避免死锁
+    UBYTE busy;
+	while(1)
+	{
+		busy = DEV_Digital_Read(EPD_BUSY_PIN);
+		busy = (busy & 0x01); 
+		if (busy == 0) break;
+	}
+   // DEV_Delay_ms(200);
 }
 
 /******************************************************************************
