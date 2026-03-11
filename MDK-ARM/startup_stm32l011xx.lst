@@ -373,10 +373,10 @@ ARM Macro Assembler    Page 6
               00000000 
 Command Line: --debug --xref --diag_suppress=9931,A1950W --cpu=Cortex-M0+ --dep
 end=nfc_epd\startup_stm32l011xx.d -onfc_epd\startup_stm32l011xx.o -I.\RTE\_EPD_
-2IN9B_V3 -IC:\Keil_v5\ARM\PACK\ARM\CMSIS\6.1.0\CMSIS\Core\Include --predefine="
-__EVAL SETA 1" --predefine="__UVISION_VERSION SETA 541" --predefine="STM32L011x
-x SETA 1" --predefine="_RTE_ SETA 1" --list=startup_stm32l011xx.lst startup_stm
-32l011xx.s
+SSD1680 -IC:\Keil_v5\ARM\PACK\ARM\CMSIS\6.1.0\CMSIS\Core\Include --predefine="_
+_EVAL SETA 1" --predefine="__UVISION_VERSION SETA 541" --predefine="STM32L011xx
+ SETA 1" --predefine="_RTE_ SETA 1" --list=startup_stm32l011xx.lst startup_stm3
+2l011xx.s
 
 
 
