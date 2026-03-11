@@ -169,6 +169,7 @@ bool checkFP(uint8_t *data){
       writeDone = true;
       refreshPending = true;
     }
+      HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
       stopFlag = true;
       return true;
    }
@@ -268,7 +269,10 @@ int main(void)
       if (checkReady()){
          uint8_t data64[64];
          readPages(0xf8, 0xfb, data64);
-         if (checkFP(data64)) continue;
+         if (checkFP(data64)) {
+           if (stopFlag) break;
+           continue;
+         }
 				
          if (!writeDone){
   						#if defined(NO_RED)
