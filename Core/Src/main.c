@@ -71,7 +71,28 @@ uint32_t have_writen = 0;
 uint32_t all_count = 0;
 bool stopFlag = false;
 bool writeDone = false;
+bool refreshPending = false;
 bool invertByte = false;
+
+static uint32_t EPD_FrameBytes(void)
+{
+#if defined(NO_RED)
+  return (uint32_t)EPD_WIDTH * (uint32_t)EPD_HEIGHT / 8;
+#else
+  return (uint32_t)EPD_WIDTH * (uint32_t)EPD_HEIGHT / 4;
+#endif
+}
+
+static void EPD_FillRemainingFrame(uint32_t written_bytes)
+{
+  uint32_t frame_bytes = EPD_FrameBytes();
+  uint8_t white_byte = 0xFF;
+
+  while (written_bytes < frame_bytes) {
+    EPD_SendData(white_byte);
+    written_bytes++;
+  }
+}
 
 void enableMirror(void){
 // add sram mirror
@@ -140,8 +161,14 @@ bool checkFP(uint8_t *data){
       have_writen = 0;
       return true;
 
-   }else if (memcmp(data, pg_data, 48) == 0 && data[SRAM_SIZE-4] == 'F' && data[SRAM_SIZE-3] == 'S')
+  }else if (memcmp(data, pg_data, 48) == 0 && data[SRAM_SIZE-4] == 'F' && data[SRAM_SIZE-3] == 'S')
    {
+    if (!writeDone && all_count > 0) {
+      EPD_FillRemainingFrame(all_count);
+      all_count = EPD_FrameBytes();
+      writeDone = true;
+      refreshPending = true;
+    }
       stopFlag = true;
       return true;
    }
@@ -244,23 +271,21 @@ int main(void)
          if (checkFP(data64)) continue;
 				
          if (!writeDone){
-							#if defined(NO_RED)
-              if (all_count >= EPD_WIDTH*EPD_HEIGHT/8){
-                  EPD_TurnOnDisplay();
-									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
-                  writeDone = true;
-							}
+  						#if defined(NO_RED)
+                if (all_count >= EPD_WIDTH*EPD_HEIGHT/8){
+                    writeDone = true;
+                    refreshPending = true;
+  							}
 							//EPD_write64(data64);
                   DEV_Digital_Write(EPD_DC_PIN, 1);
 									DEV_Digital_Write(EPD_CS_PIN, 0);
 									DEV_SPI_Write_nByte(data64, 64);
 									DEV_Digital_Write(EPD_CS_PIN, 1);
 							#else
-					     if (all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
-                  EPD_TurnOnDisplay();
-									HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+               if (all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
                   writeDone = true;
-								}
+                  refreshPending = true;
+                }
 							  if (invertByte){
 									for(size_t i=0;i<64;i++){
 										data64[i] ^= 0xff;
@@ -297,6 +322,17 @@ int main(void)
 							#endif
 	
 					all_count += 64;
+          #if defined(NO_RED)
+          if (!writeDone && all_count >= EPD_WIDTH*EPD_HEIGHT/8){
+            writeDone = true;
+            refreshPending = true;
+          }
+          #else
+          if (!writeDone && all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
+            writeDone = true;
+            refreshPending = true;
+          }
+          #endif
 				 }							 
          have_writen += 64;
          if (have_writen >= total_writen && total_writen != 0){
@@ -306,6 +342,10 @@ int main(void)
 				}
       
      if (stopFlag) break;
+  }
+  if (refreshPending){
+    EPD_TurnOnDisplay();
+    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
   }
 	EPD_ReadBusy();
 	
@@ -466,7 +506,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14|LED_PIN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin|EPD_BUSY_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PC14 LED_PIN_Pin */
   GPIO_InitStruct.Pin = GPIO_PIN_14|LED_PIN_Pin;
@@ -475,12 +515,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : EPD_DC_Pin EPD_CS_Pin EPD_RST_Pin EPD_BUSY_Pin */
-  GPIO_InitStruct.Pin = EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin|EPD_BUSY_Pin;
+  /*Configure GPIO pins : EPD_DC_Pin EPD_CS_Pin EPD_RST_Pin */
+  GPIO_InitStruct.Pin = EPD_DC_Pin|EPD_CS_Pin|EPD_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : EPD_BUSY_Pin */
+  GPIO_InitStruct.Pin = EPD_BUSY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(EPD_BUSY_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

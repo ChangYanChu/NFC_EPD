@@ -27,6 +27,7 @@
 ******************************************************************************/
 #if defined(EPD_SSD1680)
 #include "EPD_SSD1680.h"
+static void EPD_ResetRAMPointer(void);
 
 /******************************************************************************
 function :  Software reset
@@ -229,6 +230,7 @@ parameter:
 ******************************************************************************/
 void EPD_Start_Red(void)
 {
+    EPD_ResetRAMPointer();
     EPD_SendCommand(0x26);
 }
 
@@ -238,6 +240,7 @@ parameter:
 ******************************************************************************/
 void EPD_Start_Black(void)
 {
+    EPD_ResetRAMPointer();
     EPD_SendCommand(0x24);
 }
 
