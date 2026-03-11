@@ -345,7 +345,7 @@ int main(void)
   }
   if (refreshPending){
     EPD_TurnOnDisplay();
-    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
   }
 	EPD_ReadBusy();
 	
