@@ -133,7 +133,8 @@ bool checkReady()
     uint8_t txData[2] = {0xFE, 0x06};
     HAL_I2C_Master_Transmit(&hi2c1, NT3H_I2C_ADDR, txData, 2, 100);
     HAL_I2C_Master_Receive(&hi2c1, NT3H_I2C_ADDR, rxData, 1, 100);
-  return (rxData[0] & 8) != 0;
+	return (rxData[0] & 16) != 0;
+		//									0b10000
 }
 
 void WriteACK(uint8_t *dataBuffer)
@@ -256,7 +257,6 @@ int main(void)
 	
 	
 	HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_RESET);
-	setNFCtoI2C();
 	
 
   while (1)
@@ -264,6 +264,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+			startPassthrough();
       if (checkReady()){
          uint8_t data64[64];
          readPages(0xf8, 0xfb, data64);
@@ -339,9 +340,6 @@ int main(void)
             have_writen = 0;
          }
 				}
-      else {
-        HAL_Delay(5);
-      }
       
      if (stopFlag) break;
   }
