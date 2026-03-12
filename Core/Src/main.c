@@ -72,6 +72,7 @@ uint32_t all_count = 0;
 bool stopFlag = false;
 bool writeDone = false;
 bool refreshPending = false;
+bool refreshStarted = false;
 bool invertByte = false;
 
 static uint32_t EPD_FrameBytes(void)
@@ -195,6 +196,15 @@ void readPages(uint8_t startPage, uint8_t endPage, uint8_t *data64)
     }
 }
 
+static void StartRefreshIfNeeded(void)
+{
+  if (refreshPending && !refreshStarted) {
+    EPD_TurnOnDisplay();
+    HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
+    refreshStarted = true;
+  }
+}
+
 
 
 
@@ -279,6 +289,7 @@ int main(void)
                 if (all_count >= EPD_WIDTH*EPD_HEIGHT/8){
                     writeDone = true;
                     refreshPending = true;
+                  StartRefreshIfNeeded();
   							}
 							//EPD_write64(data64);
                   DEV_Digital_Write(EPD_DC_PIN, 1);
@@ -289,6 +300,7 @@ int main(void)
                if (all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
                   writeDone = true;
                   refreshPending = true;
+                  StartRefreshIfNeeded();
                 }
 							  if (invertByte){
 									for(size_t i=0;i<64;i++){
@@ -330,11 +342,13 @@ int main(void)
           if (!writeDone && all_count >= EPD_WIDTH*EPD_HEIGHT/8){
             writeDone = true;
             refreshPending = true;
+            StartRefreshIfNeeded();
           }
           #else
           if (!writeDone && all_count >= EPD_WIDTH*EPD_HEIGHT/8*2){
             writeDone = true;
             refreshPending = true;
+            StartRefreshIfNeeded();
           }
           #endif
 				 }							 
@@ -348,8 +362,10 @@ int main(void)
      if (stopFlag) break;
   }
   if (refreshPending){
+    if (!refreshStarted) {
+      EPD_TurnOnDisplay();
+    }
     stopPassthrough();
-    EPD_TurnOnDisplay();
     EPD_Sleep();
     HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
   }
