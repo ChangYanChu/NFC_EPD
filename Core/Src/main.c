@@ -348,7 +348,9 @@ int main(void)
      if (stopFlag) break;
   }
   if (refreshPending){
+    stopPassthrough();
     EPD_TurnOnDisplay();
+    EPD_Sleep();
     HAL_GPIO_WritePin(LED_PIN_GPIO_Port, LED_PIN_Pin, GPIO_PIN_SET);
   }
 	EPD_ReadBusy();
